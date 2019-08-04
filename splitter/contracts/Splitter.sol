@@ -30,19 +30,14 @@ contract Splitter is Pausable{
 		require(carol != address(0), "Receiver 2 address empty.");
 		
 		uint256 splitAmount = msg.value.div(2);
-		
-		uint256 currBalance = balances[bob];
-		uint256 newBalance = currBalance.add(splitAmount);
-		balances[bob] = newBalance;
+		balances[bob] = balances[bob].add(splitAmount);
 
 		// if amount is odd, give extra 1 to Carol.
 		if (msg.value.mod(2) != 0){
 			splitAmount = splitAmount.add(1);
 		}
 
-		currBalance = balances[carol];
-		newBalance = currBalance.add(splitAmount);
-		balances[carol] = newBalance;
+		balances[carol] = balances[carol].add(splitAmount);
         
         emit LogSplit(msg.sender, bob, carol, msg.value);
         

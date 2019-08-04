@@ -21,11 +21,20 @@ contract('Splitter', function(accounts){
 	associated gas costs.
 	*/
 
-	it ("Rejects 0 value.", () => {
+	it ("Rejects 0 value split.", () => {
 		let amountToSend = bigNum(0);
 
 		return expectedExceptionPromise(() =>{
 			return splitterContract.split(bob,carol,{from:alice,value:amountToSend});
+			});
+	});
+
+
+	it ("Rejects withdrawal of 0 balance.", () => {
+		let amountToSend = bigNum(0);
+
+		return expectedExceptionPromise(() =>{
+			return splitterContract.withdrawal({from:bob});
 			});
 	});
 
@@ -55,7 +64,7 @@ contract('Splitter', function(accounts){
 		let amountToSend = bigNum(5e8);
 		let halfAmount = amountToSend.div(bigNum(2));
 		
-		splitterContract.split(bob,carol, {from:alice, value:amountToSend})
+		return splitterContract.split(bob,carol, {from:alice, value:amountToSend})
 		.then(() => {
 			return Promise.all([splitterContract.balances.call(bob),splitterContract.balances.call(carol)]);
 		}).then((contractBalances) => {
@@ -72,7 +81,7 @@ contract('Splitter', function(accounts){
 		let bobAmount = bigNum(5e8).div(bigNum(2));
 		let carolAmount = bobAmount.add(bigNum(1));
 
-		splitterContract.split(bob,carol, {from:alice, value:amountToSend})
+		return splitterContract.split(bob,carol, {from:alice, value:amountToSend})
 		.then(() => {
 			return Promise.all([splitterContract.balances.call(bob),splitterContract.balances.call(carol)]);
 		}).then((contractBalances) => {
@@ -86,24 +95,40 @@ contract('Splitter', function(accounts){
 
 	it("Withdrawal works correctly.", function(){
 		let bobInitial, carolInitial, bobContract, carolContract;
-		Promise.all([web3.eth.getBalance(bob), web3.eth.getBalance(carol)])
+		let amountToSend = bigNum(5e8).add(bigNum(1));
+		let bobGasUsed, carolGasUsed, bobGasCost, carolGasCost;
+		return Promise.all([web3.eth.getBalance(bob), web3.eth.getBalance(carol)])
 		.then((initalBal) => {
 			bobInitial = bigNum(initalBal[0]);
 			carolInitial = bigNum(initalBal[1]);
 
+			return splitterContract.split(bob, carol, {from:alice, value: amountToSend});
+		}).then(() => {
 			return Promise.all([splitterContract.balances.call(bob), splitterContract.balances.call(carol)]);
 		}).then((contractBal) => {
 			bobContract = bigNum(contractBal[0]);
 			carolContract = bigNum(contractBal[1]);
+
 			return Promise.all([splitterContract.withdrawal({from:bob}), splitterContract.withdrawal({from:carol})]);
-		}).then(() => {
-			return Promise.all([web3.eth.getBalance(bob). web3.eth.getBalance(carol)]);
+		}).then( (txes) => {
+			bobGasUsed = bigNum(txes[0].receipt.gasUsed);
+			carolGasUsed = bigNum(txes[1].receipt.gasUsed);
+
+			return Promise.all([web3.eth.getTransaction(txes[0].tx), web3.eth.getTransaction(txes[1].tx)]);
+		}).then( (txes) => {
+			let bobGasPrice = bigNum(txes[0].gasPrice);
+			let carolGasPrice = bigNum(txes[1].gasPrice);
+		
+			bobGasCost = bobGasPrice.mul(bobGasUsed);
+			carolGasCost = carolGasPrice.mul(carolGasUsed);
+		
+			return Promise.all([web3.eth.getBalance(bob), web3.eth.getBalance(carol)]);
 		}).then((finalBal) => {
 			let finalBob = bigNum(finalBal[0]);
 			let finalCarol = bigNum(finalBal[1]);
 
-			assert.strictEqual(finalBob.toString(10), bobInitial.add(bobContract).toString(10), "Bob's final balance incorrect.");
-			assert.strictEqual(finalCarol.toString(10), carolInitial.add(carolContract).toString(10), "Carol's final balance incorrect.");
+			assert.strictEqual(finalBob.toString(10), bobInitial.add(bobContract).sub(bobGasCost).toString(10), "Bob's final balance incorrect.");
+			assert.strictEqual(finalCarol.toString(10), carolInitial.add(carolContract).sub(carolGasCost).toString(10), "Carol's final balance incorrect.");
 
 			return Promise.all([splitterContract.balances.call(bob), splitterContract.balances.call(carol)]);
 		}).then((finalContBal) => {
