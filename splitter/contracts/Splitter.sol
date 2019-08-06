@@ -31,14 +31,14 @@ contract Splitter is Pausable{
 		
 		uint256 splitAmount = msg.value.div(2);
 		balances[bob] = balances[bob].add(splitAmount);
-
-		// if amount is odd, give extra 1 to Carol.
-		if (msg.value.mod(2) != 0){
-			splitAmount = splitAmount.add(1);
-		}
-
 		balances[carol] = balances[carol].add(splitAmount);
-        
+
+		// if amount is odd, return extra 1 to sender.
+		uint256 remainder = msg.value - (2*splitAmount);
+		if (remainder > 0){
+			balances[msg.sender] = balances[msg.sender].add(remainder);
+		}
+		
         emit LogSplit(msg.sender, bob, carol, msg.value);
         
 		return true;
