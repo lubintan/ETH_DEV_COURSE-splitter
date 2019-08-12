@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en" dir="ltr">
+<head>
+<title>SPLITTER</title>
+<meta charset="utf-8">
+
+</head>
+<body>
+
+<div>Splitter</div>
+<div>Lubin Tan</div>
+<br>
+<br>
+<br>
+<div>
+    <!-- Split From: <input name="alice" type="text" /><br> -->
+
+    Split From: <select id="alice"></select>
+
+    Amount: <input name="amount" type="number" placeholder="0" /> Wei <br>
+    Recipient 1: <select id="bob"></select><br>
+    Recipient 2: <select id="carol"></select><br>
+    <button id="Split">Split</button> <br>
+    Status: <span id="splitStatus"> NA</span><br>
+
+</div>
+<br>
+<div>
+    Split Event Emitted <br>
+    From: <span id="from">NA</span><br>
+    Recipient 1:<span id="to1">NA</span><br>
+    Recipient 2:<span id="to2">NA</span><br>
+    Total Amount: <span id="logSplitValue">NA</span> Wei<br>
+</div>
+<br>
+<div>
+    Check Contract Balance <br>
+    Address: <select id="checkBal"></select><br>
+    <button id="Check">Check</button><br>
+    Balance: <span id="balance">0</span><br>
+</div>
+<br>
+<div>
+    Withdraw <br>
+    Address: <select id="withdrawingAddr"></select><br>
+    <button id="Withdraw">Withdraw</button><br>
+    Status: <span id="withdrawStatus">NA</span><br>
+</div>
+<br>
+<div>
+    Latest Withdrawal: <br>
+    From: <span id="withdrawer">NA</span><br>
+    Amount: <span id="withdrawValue">NA</span> Wei<br>
+</div>
+
+<script src="js/app.js"></script>
+
+</body>
+</html>
