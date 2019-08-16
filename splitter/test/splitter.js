@@ -1,15 +1,15 @@
 const truffleAssert = require('truffle-assertions');
-var Splitter = artifacts.require("./Splitter.sol");
-var bigNum = web3.utils.toBN;
+const Splitter = artifacts.require("./Splitter.sol");
+const bigNum = web3.utils.toBN;
+const seqPrm = require("./sequentialPromise.js");
 
 contract('Splitter', function(accounts){
 	
 	const [alice,bob,carol] = accounts;
-	var splitterContract;
+	let splitterContract;
 
 	beforeEach( async () => {
-		let instance = await Splitter.new({from:alice});
-		splitterContract = instance;
+		splitterContract = await Splitter.new({ from:alice });
 	});
 
 	/*
@@ -20,136 +20,118 @@ contract('Splitter', function(accounts){
 	*/
 
 	it ("Rejects 0 value split.", async () => {
-		let amountToSend = bigNum(0);
-		await truffleAssert.reverts(splitterContract.split(bob,carol,{from:alice,value:amountToSend}))
+		const amountToSend = bigNum(0);
+		await truffleAssert.reverts(splitterContract.split(bob,carol,{ from:alice, value:amountToSend }))
 	});
 
-
 	it ("Rejects withdrawal of 0 balance.", async () => {
-		await truffleAssert.reverts(splitterContract.withdrawal({from:bob}));
+		await truffleAssert.reverts(splitterContract.withdrawal({ from:bob }));
 	});
 
 	it ("Cannot withdraw when contract paused.", async () =>{
-		let amountToSend = bigNum(5e8);
-		await splitterContract.split(bob,carol,{from:alice,value:amountToSend});
-		await splitterContract.pause({from:alice});
-		await truffleAssert.reverts(splitterContract.withdrawal({from:bob}));
+		const amountToSend = bigNum(5e8);
+		await splitterContract.split(bob,carol,{ from:alice, value:amountToSend });
+		await splitterContract.pause({ from:alice});
+		await truffleAssert.reverts(splitterContract.withdrawal({ from:bob }));
 	});
 
 	it ("Cannot split when contract paused.", async () =>{
-		let amountToSend = bigNum(5e8);
-		await splitterContract.pause({from:alice});
-		await truffleAssert.reverts(splitterContract.split(bob,carol,{from:alice,value:amountToSend}));
+		const amountToSend = bigNum(5e8);
+		await splitterContract.pause({ from:alice});
+		await truffleAssert.reverts(splitterContract.split(bob,carol,{ from:alice, value:amountToSend }));
 	});
 
 	it("Splits even amount correctly.", async () => {
-		let amountToSend = bigNum(5e8);
-		let halfAmount = amountToSend.div(bigNum(2));
+		const amountToSend = bigNum(5e8);
+		const halfAmount = amountToSend.div(bigNum(2));
 		
-		let split = await splitterContract.split(bob,carol, {from:alice, value:amountToSend});
-		await truffleAssert.eventEmitted(split,'LogSplit');
+		const split = await splitterContract.split(bob,carol, { from:alice, value:amountToSend });
+		await truffleAssert.eventEmitted(split, 'LogSplit');
 
-		let contractBalances = await Promise.all([splitterContract.balances.call(bob),splitterContract.balances.call(carol)]);
+		const contractBalances = await seqPrm([
+			() => splitterContract.balances.call(bob), 
+			() => splitterContract.balances.call(carol)
+		]);
 
-		assert.strictEqual(contractBalances[0].toString(10),halfAmount.toString(10),"Bob's contract balance incorrect.");
-		assert.strictEqual(contractBalances[1].toString(10),halfAmount.toString(10),"Carol's contract balance incorrect.");
+		assert.strictEqual(contractBalances[0].toString(10),halfAmount.toString(10), "Bob's contract balance incorrect.");
+		assert.strictEqual(contractBalances[1].toString(10),halfAmount.toString(10), "Carol's contract balance incorrect.");
 
 	});
 
 	it("Splits odd amount correctly.", async () => {
-		let amountToSend = bigNum(5e8).add(bigNum(1));
-		let splitAmount = bigNum(5e8).div(bigNum(2));
+		const amountToSend = bigNum(5e8).add(bigNum(1));
+		const splitAmount = bigNum(5e8).div(bigNum(2));
 		
-		let split = await splitterContract.split(bob,carol, {from:alice, value:amountToSend});
-		await truffleAssert.eventEmitted(split,'LogSplit');
+		const split = await splitterContract.split(bob,carol, { from:alice, value:amountToSend });
+		await truffleAssert.eventEmitted(split, 'LogSplit');
 
-		let contractBalances = await Promise.all([
-				splitterContract.balances.call(alice),
-				splitterContract.balances.call(bob),
-				splitterContract.balances.call(carol)
+		const contractBalances = await seqPrm([
+				() => splitterContract.balances.call(alice),
+				() => splitterContract.balances.call(bob),
+				() => splitterContract.balances.call(carol)
 			]);
 		
-		assert.strictEqual(contractBalances[0].toString(10),bigNum(1).toString(10),"Alice's contract balance incorrect.");
-		assert.strictEqual(contractBalances[1].toString(10),splitAmount.toString(10),"Bob's contract balance incorrect.");
-		assert.strictEqual(contractBalances[2].toString(10),splitAmount.toString(10),"Carol's contract balance incorrect.");
-		await console.log("went through");
-
+		assert.strictEqual(contractBalances[0].toString(10),bigNum(1).toString(10), "Alice's contract balance incorrect.");
+		assert.strictEqual(contractBalances[1].toString(10),splitAmount.toString(10), "Bob's contract balance incorrect.");
+		assert.strictEqual(contractBalances[2].toString(10),splitAmount.toString(10), "Carol's contract balance incorrect.");
 	});
 
 	it("Withdrawal works correctly.", async() => {
-		let aliceInitial, bobInitial, carolInitial;
-		let amountToSend = bigNum(5e8).add(bigNum(1));
-		let splitAmount = bigNum(5e8).div(bigNum(2));
-		let bobGasUsed, carolGasUsed, bobGasCost, carolGasCost;
+		const amountToSend = bigNum(5e8).add(bigNum(1));
+		const splitAmount = bigNum(5e8).div(bigNum(2));
 		
-		let split = await splitterContract.split(bob, carol, {from:alice, value: amountToSend});
-		await truffleAssert.eventEmitted(split,'LogSplit');
+		const split = await splitterContract.split(bob, carol, { from:alice, value: amountToSend });
+		await truffleAssert.eventEmitted(split, 'LogSplit');
 
-		let initialBal = await Promise.all([
-			web3.eth.getBalance(alice),
-			web3.eth.getBalance(bob),
-			web3.eth.getBalance(carol)
+		const initialBal = await seqPrm([
+			() => web3.eth.getBalance(alice),
+			() => web3.eth.getBalance(bob),
 		]);
 
-		aliceInitial = bigNum(initialBal[0]);
-		bobInitial = bigNum(initialBal[1]);
-		carolInitial = bigNum(initialBal[2]);
+		const aliceInitial = bigNum(initialBal[0]);
+		const bobInitial = bigNum(initialBal[1]);
 
-		let txes = await Promise.all([
-			splitterContract.withdrawal({from:alice}), 
-			splitterContract.withdrawal({from:bob}), 
-			splitterContract.withdrawal({from:carol})
+		let txes = await seqPrm([
+			() => splitterContract.withdrawal({ from:alice }), 
+			() => splitterContract.withdrawal({ from:bob }), 
 		]);
 
-		await truffleAssert.eventEmitted(txes[2],'LogWithdrawal');
+		await truffleAssert.eventEmitted(txes[1], 'LogWithdrawal');
 		// await truffleAssert.prettyPrintEmittedEvents(txes[2]);
 
-		aliceGasUsed = bigNum(txes[0].receipt.gasUsed);
-		bobGasUsed = bigNum(txes[1].receipt.gasUsed);
-		carolGasUsed = bigNum(txes[2].receipt.gasUsed);
+		const aliceGasUsed = bigNum(txes[0].receipt.gasUsed);
+		const bobGasUsed = bigNum(txes[1].receipt.gasUsed);
 
-		txes = await Promise.all([
-			web3.eth.getTransaction(txes[0].tx),
-			web3.eth.getTransaction(txes[1].tx), 
-			web3.eth.getTransaction(txes[2].tx)
+		txes = await seqPrm([
+			() => web3.eth.getTransaction(txes[0].tx),
+			() => web3.eth.getTransaction(txes[1].tx), 
 		]);
-		let aliceGasPrice = bigNum(txes[0].gasPrice); 
-		let bobGasPrice = bigNum(txes[1].gasPrice);
-		let carolGasPrice = bigNum(txes[2].gasPrice);
+		const aliceGasPrice = bigNum(txes[0].gasPrice); 
+		const bobGasPrice = bigNum(txes[1].gasPrice);
 	
-		aliceGasCost = aliceGasPrice.mul(aliceGasUsed);
-		bobGasCost = bobGasPrice.mul(bobGasUsed);
-		carolGasCost = carolGasPrice.mul(carolGasUsed);
+		const aliceGasCost = aliceGasPrice.mul(aliceGasUsed);
+		const bobGasCost = bobGasPrice.mul(bobGasUsed);
 	
-		let finalBal = await Promise.all([
-			web3.eth.getBalance(alice),
-			web3.eth.getBalance(bob),
-			web3.eth.getBalance(carol)
+		const finalBal = await seqPrm([
+			() => web3.eth.getBalance(alice),
+			() => web3.eth.getBalance(bob),
 		]);
-		let finalAlice = bigNum(finalBal[0]);
-		let finalBob = bigNum(finalBal[1]);
-		let finalCarol = bigNum(finalBal[2]);
+		const finalAlice = bigNum(finalBal[0]);
+		const finalBob = bigNum(finalBal[1]);
 		
 		assert.strictEqual(finalAlice.toString(10), aliceInitial.add(bigNum(1)).sub(aliceGasCost).toString(10), "Alice's final balance incorrect.");
 		assert.strictEqual(finalBob.toString(10), bobInitial.add(splitAmount).sub(bobGasCost).toString(10), "Bob's final balance incorrect.");
-		assert.strictEqual(finalCarol.toString(10), carolInitial.add(splitAmount).sub(carolGasCost).toString(10), "Carol's final balance incorrect.");
 
-		let finalContBal = await Promise.all([
-			splitterContract.balances.call(alice), 
-			splitterContract.balances.call(bob), 
-			splitterContract.balances.call(carol)
+		const finalContBal = await seqPrm([
+			() => splitterContract.balances.call(alice), 
+			() => splitterContract.balances.call(bob), 
 		]);
 
-		let finalContAlice = bigNum(finalContBal[0]);
-		let finalContBob = bigNum(finalContBal[1]);
-		let finalContCarol = bigNum(finalContBal[2]);
+		const finalContAlice = bigNum(finalContBal[0]);
+		const finalContBob = bigNum(finalContBal[1]);
 
 		assert.strictEqual(finalContAlice.toString(10), bigNum(0).toString(10), "Alice's contract balance not 0 after withdrawal.")
 		assert.strictEqual(finalContBob.toString(10), bigNum(0).toString(10), "Bob's contract balance not 0 after withdrawal.")
-		assert.strictEqual(finalContCarol.toString(10), bigNum(0).toString(10), "Carol's contract balance not 0 after withdrawal.")
-
-		await console.log("went through");
-
 	});
 
 })
