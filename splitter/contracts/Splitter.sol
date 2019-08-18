@@ -18,6 +18,17 @@ contract Splitter is Pausable{
 		public
 	{}
 
+	function killAndWithdraw()
+		public
+		onlyPauser
+		whenPaused
+		//Pausing can only be done by owner, unless owner has given pausing rights to another address.
+		//This function requires the contract to first be paused, acting as an extra level of confirmation since
+		//this irreversibly selfdestructs the contract.
+	{
+		selfdestruct(msg.sender);
+	}
+
 	function split(address bob, address carol)
 		public
 		payable
