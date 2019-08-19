@@ -19,45 +19,58 @@ contract('Splitter', function(accounts){
 	associated gas costs.
 	*/
 
-	it ("Rejects 0 value split.", async () => {
+	it ("Reverts 0 value split.", async () => {
 		const amountToSend = bigNum(0);
 		await truffleAssert.reverts(splitterContract.split(bob, carol, { from: alice, value: amountToSend }))
 	});
 
-	it ("Rejects withdrawal of 0 balance.", async () => {
+	it ("Reverts withdrawal of 0 balance.", async () => {
 		await truffleAssert.reverts(splitterContract.withdrawal({ from:bob }));
 	});
 
-	it ("Cannot withdraw when contract paused.", async () =>{
+	it ("Reverts withdrawals when contract paused.", async () =>{
 		const amountToSend = bigNum(5e8);
 		await splitterContract.split(bob,carol,{ from: alice, value: amountToSend });
 		await splitterContract.pause({ from: alice});
 		await truffleAssert.reverts(splitterContract.withdrawal({ from:bob }));
 	});
 
-	it ("Cannot split when contract paused.", async () =>{
+	it ("Reverts splitting when contract is paused.", async () =>{
 		const amountToSend = bigNum(5e8);
 		await splitterContract.pause({ from: alice });
 		await truffleAssert.reverts(splitterContract.split(bob, carol, { from: alice, value: amountToSend }));
 	});
 
-	it ("Cannot kill when contract is not paused.", async () => {
-		await truffleAssert.reverts(splitterContract.killAndWithdraw({ from: alice }));
+	it ("Reverts killing when contract is not paused.", async () => {
+		await truffleAssert.reverts(splitterContract.kill({ from: alice }));
 	});
 
-	it ("Cannot be killed by non-pauser/owner.", async () => {
+	it ("Reverts killing by non-pauser/owner.", async () => {
 		await splitterContract.pause( {from: alice });
-		await truffleAssert.reverts(splitterContract.killAndWithdraw({ from: bob }));
+		await truffleAssert.reverts(splitterContract.kill({ from: bob }));
 	});
 
-	it ("Killing and withdrawing contract moves funds to the owner.", async () => {
+	it ("Reverts post-killing withdrawal by non-owner.", async () => {
+		await splitterContract.pause( {from: alice });
+		await splitterContract.kill( {from: alice });
+		await truffleAssert.reverts(splitterContract.killedWithdrawal({ from: bob }));
+	});
+
+	it ("Reverts post-killing withdrawal of 0 balance.", async () => {
+		await splitterContract.pause({ from: alice });
+		await splitterContract.kill({ from: alice });
+		await truffleAssert.reverts(splitterContract.killedWithdrawal({ from: alice }));
+	});
+
+	it ("Post-killing withdrawal moves funds to the owner correctly.", async () => {
 		const amountToSend = bigNum(5e8);
 		await splitterContract.split(bob, carol, {from: alice, value: amountToSend});
 		await splitterContract.pause({ from: alice });
+		await splitterContract.kill({ from: alice });
 		
 		const aliceBalBefore = bigNum(await web3.eth.getBalance(alice));
 		
-		let tx = await splitterContract.killAndWithdraw({ from: alice });
+		let tx = await splitterContract.killedWithdrawal({ from: alice });
 		
 		const aliceGasUsed = bigNum(tx.receipt.gasUsed);
 		tx = await web3.eth.getTransaction(tx.tx);
@@ -68,22 +81,15 @@ contract('Splitter', function(accounts){
 		assert.strictEqual(aliceBalAfter.toString(10), aliceBalBefore.add(amountToSend).sub(aliceGasCost).toString(10), "Alice's final balance incorrect.");
 	});
 
-	it ("Contract functions are ineffective after killing.", async () => {
+	it ("Post-killing contract functions revert upon invocation.", async () => {
 		const amountToSend = bigNum(5e8);
 		await splitterContract.split(bob, carol, {from: alice, value: amountToSend});
 		await splitterContract.pause({ from: alice });		
-		await splitterContract.killAndWithdraw({ from: alice });
+		await splitterContract.kill({ from: alice });
+		await splitterContract.unpause({ from: alice });		
 
-		const bobBalBefore = bigNum(await web3.eth.getBalance(bob));
-		let tx = await splitterContract.withdrawal({ from: bob });
-
-		const bobGasUsed = bigNum(tx.receipt.gasUsed);
-		tx = await web3.eth.getTransaction(tx.tx);
-		const bobGasPrice = bigNum(tx.gasPrice); 	
-		const bobGasCost = bobGasPrice.mul(bobGasUsed);
-
-		const bobBalAfter = bigNum(await web3.eth.getBalance(bob));		
-		assert.strictEqual(bobBalAfter.toString(10), bobBalBefore.sub(bobGasCost).toString(10), "Bob's final balance incorrect.");
+		await truffleAssert.reverts(splitterContract.withdrawal({ from: bob }));
+		await truffleAssert.reverts(splitterContract.split(bob, carol, { from: alice }));
 	});
 
 	it("Splits even amount correctly.", async () => {

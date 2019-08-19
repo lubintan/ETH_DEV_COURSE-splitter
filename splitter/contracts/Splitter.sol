@@ -5,11 +5,46 @@ import 'openzeppelin-solidity/contracts/lifecycle/Pausable.sol';
 //version: openzeppelin-solidity@2.3.0 
 //functions: isPauser(address), addPauser(address), renouncePauser(), pause(), unpause(), paused()
 
-contract Splitter is Pausable{
+contract Killable is Pausable{
+
+	bool private killed;
+    event LogKilled(address account);
+
+	constructor ()
+	public
+	{
+		killed = false;
+    }
+
+	function kill()
+		public
+		onlyPauser
+		whenPaused
+	{
+		killed = true;
+		emit LogKilled(msg.sender);
+	}
+
+	modifier whenNotKilled()
+	{
+		require(!killed, "Killable: killed");
+		_;
+	}
+
+	modifier whenKilled()
+	{
+		require(killed, "Killable: not killed");
+		_;
+	}
+}
+
+
+contract Splitter is Killable{
     mapping (address => uint256) public balances;
 
 	event LogSplit(address indexed sender, address indexed accountA, address indexed accountB, uint256 value);
 	event LogWithdrawal(address indexed account, uint256 indexed value);
+	event LogKilledWithdrawal(address account, uint256 value);
 
 	using SafeMath for uint256;
 	//add, sub, mul, div, mod
@@ -18,20 +53,23 @@ contract Splitter is Pausable{
 		public
 	{}
 
-	function killAndWithdraw()
+	function killedWithdrawal()
 		public
 		onlyPauser
-		whenPaused
-		//Pausing can only be done by owner, unless owner has given pausing rights to another address.
-		//This function requires the contract to first be paused, acting as an extra level of confirmation since
-		//this irreversibly selfdestructs the contract.
+		whenKilled
 	{
-		selfdestruct(msg.sender);
+		uint256 contractBalance = address(this).balance;
+		address payable withdrawer = msg.sender;
+
+		require(contractBalance > 0, "Contract balance is 0.");
+		emit LogKilledWithdrawal(withdrawer, contractBalance);
+		withdrawer.transfer(contractBalance);
 	}
 
 	function split(address bob, address carol)
 		public
 		payable
+		whenNotKilled
 		whenNotPaused
 		returns (bool success)
 	{
@@ -56,6 +94,7 @@ contract Splitter is Pausable{
 
 	function withdrawal()
 		public
+		whenNotKilled
 		whenNotPaused
     {
 		uint256 withdrawalAmount = balances[msg.sender];
